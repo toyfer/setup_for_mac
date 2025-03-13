@@ -1,93 +1,39 @@
 {
-	description = "mac configuration";
+  description = "macOS configuration";
 
-	inputs = {
-		nixpkgs.url = "github:NixOS/nixpkgs";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+    nix-darwin.url = "github:lnl7/nix-darwin/master";
+    nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
+    homebrew-core = {
+      url = "github:homebrew/homebrew-core";
+      flake = false;
+    };
+    homebrew-cask = {
+      url = "github:homebrew/homebrew-cask";
+      flake = false;
+    };
+  };
 
-		nix-darwin.url = "github:lnl7/nix-darwin/master";
-		nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
+  outputs = inputs@{ self, nixpkgs, nix-darwin, home-manager, nix-homebrew, ... }:
+    let
+      lib = import ./lib { inherit inputs; };
+    in {
+      darwinConfigurations."MacminiM4" = lib.mkDarwinSystem {
+        hostname = "MacminiM4";
+        system = "aarch64-darwin";
+        username = "user"; # あなたのユーザー名
+      };
 
-		home-manager.url = "github:nix-community/home-manager";
-		home-manager.inputs.nixpkgs.follows = "nixpkgs";
+      # 他のホスト設定があれば追加可能
+      # darwinConfigurations."MacBook" = ...
 
-		nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
-
-		homebrew-core = {
-			url = "github:homebrew/homebrew-core";
-			flake = false;
-		};
-
-		homebrew-cask = {
-			url = "github:homebrew/homebrew-cask";
-			flake = false;
-		};
-
-	};
-
-	outputs = inputs@{ self, nix-darwin, nixpkgs, nix-homebrew, homebrew-core, homebrew-cask, home-manager }:
-
-	let
-		configuration = { pkgs, ... }: {
-			environment.systemPackages = with pkgs; [
-				gh
-			];
-
-			nix-homebrew = {
-				enable = true;
-				enableRosetta = true;
-				user = "user";
-
-				taps = {
-					"homebrew/homebrew-core" = inputs.homebrew-core;
-					"homebrew/homebrew-cask" = inputs.homebrew-cask;
-				};
-			};
-
-			homebrew = {
-				enable = true;
-				onActivation.cleanup = "uninstall";
-				taps = [];
-				brews = [];
-				casks = [ "firefox" "discord" ]; # casks (複数形) に修正
-			};
-
-			# services.nix-daemon.enable = true; # 削除: 不要になった設定
-
-			nix.settings.experimental-features = "nix-command flakes";
-
-			nix.extraOptions = ''
-				extra-platforms = x86_64-darwin aarch64-darwin
-			'';
-
-			system.configurationRevision = self.rev or self.dirtyRev or null;
-
-			system.stateVersion = 5;
-
-			nixpkgs.hostPlatform = "aarch64-darwin";
-
-			system.defaults = {
-				finder.AppleShowAllExtensions = true;
-				finder.FXPreferredViewStyle = "clmv";
-
-				dock = {
-					autohide = true;
-					mru-spaces = false;
-					persistent-apps = [
-						"/Applications/Safari.app"
-					];
-				};
-			};
-		};
-	in
-	{
-		darwinConfigurations."MacminiM4" = nix-darwin.lib.darwinSystem {
-			modules = [
-				nix-homebrew.darwinModules.nix-homebrew
-				configuration
-			];
-		};
-
-		darwinPackages = self.darwinConfigurations."MacminiM4".pkgs;
-	};
-
+      # 開発用のシェル設定（オプション）
+      devShells = lib.forAllSystems (system: {
+        default = import ./lib/devshell.nix { pkgs = nixpkgs.legacyPackages.${system}; };
+      });
+    };
 }
